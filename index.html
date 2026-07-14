@@ -477,6 +477,24 @@
     letter-spacing: .06em; cursor: pointer; transition: all .15s;
   }
   .score-btn:hover { color: var(--text2); border-color: var(--border2); }
+
+  /* ── Drop zone overlay ── */
+  .drop-overlay {
+    position: absolute; inset: 0; z-index: 40;
+    background: rgba(10,10,15,0.85);
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; pointer-events: none;
+    transition: opacity .15s;
+  }
+  .drop-overlay.active { opacity: 1; pointer-events: auto; }
+  .drop-box {
+    border: 2px dashed var(--accent); border-radius: 12px;
+    padding: 40px 52px; text-align: center;
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+  }
+  .drop-icon { font-size: 48px; line-height: 1; }
+  .drop-main { font: 700 13px 'Space Mono'; color: var(--accent); letter-spacing: .08em; }
+  .drop-sub  { font: 400 10px 'Space Mono'; color: var(--muted); }
 </style>
 </head>
 <body>
@@ -515,6 +533,11 @@
         <path d="M10 6l4 4"/>
       </svg>
     </button>
+    <button class="tool-btn" id="toolImport" title="Import image">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M10 3v10M6 9l4 4 4-4"/><path d="M3 16v1h14v-1"/>
+      </svg>
+    </button>
     <div class="tool-divider"></div>
     <button class="tool-btn" id="toolUndo" title="Undo (⌘Z)">
       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
@@ -534,6 +557,14 @@
     <canvas id="mainCanvas"></canvas>
     <canvas id="waveCanvas"></canvas>
     <div class="canvas-grad"></div>
+    <div class="drop-overlay" id="dropOverlay">
+      <div class="drop-box">
+        <span class="drop-icon">🎨</span>
+        <div class="drop-main">drop image to compose</div>
+        <div class="drop-sub">png · jpg · gif · webp · bmp</div>
+      </div>
+    </div>
+    <input type="file" id="importFileInput" accept="image/*" style="display:none">
     <div id="sharedBanner">Shared painting loaded — hit Analyze &amp; Play</div>
     <div class="viz-modes" id="vizModes">
       <button class="viz-btn active" id="vizWave">wave</button>
@@ -1817,6 +1848,112 @@ document.getElementById('shareBtn').addEventListener('click', async () => {
     img.src = b64;
   } catch(e) { /* malformed hash — ignore */ }
 })();
+
+// ═══════════════════════════════════════════════════════════
+// PIXEL ART IMPORT
+// ═══════════════════════════════════════════════════════════
+const _dropOverlay = document.getElementById('dropOverlay');
+const _importInput = document.getElementById('importFileInput');
+let   _importMetaTimer = null;
+
+function _showDropOverlay(show) {
+  _dropOverlay.classList.toggle('active', show);
+  document.getElementById('toolImport').classList.toggle('active', show);
+}
+
+// Drag events — preventDefault on both dragenter and dragover to allow drop
+wrap.addEventListener('dragenter', e => { e.preventDefault(); e.stopPropagation(); _showDropOverlay(true); });
+wrap.addEventListener('dragover',  e => { e.preventDefault(); e.stopPropagation(); });
+wrap.addEventListener('dragleave', e => {
+  // Only hide when leaving the wrap itself, not a child element
+  if (!wrap.contains(e.relatedTarget)) _showDropOverlay(false);
+});
+wrap.addEventListener('drop', e => {
+  e.preventDefault(); e.stopPropagation();
+  _showDropOverlay(false);
+  const file = e.dataTransfer.files[0];
+  if (file) _importImage(file);
+});
+
+// Toolbar button → hidden file input
+document.getElementById('toolImport').addEventListener('click', () => _importInput.click());
+_importInput.addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (file) _importImage(file);
+  _importInput.value = ''; // allow re-importing the same file
+});
+
+function _importImage(file) {
+  // ── a) Validate ──────────────────────────────────────────
+  const ALLOWED = ['image/png','image/jpeg','image/gif','image/webp','image/bmp'];
+  if (!ALLOWED.includes(file.type)) {
+    showToast('unsupported file type — use png, jpg, gif, webp, or bmp');
+    return;
+  }
+  if (file.size > 20 * 1024 * 1024) {
+    showToast('file too large (max 20MB)');
+    return;
+  }
+
+  // ── b) Read ───────────────────────────────────────────────
+  const reader = new FileReader();
+  reader.onerror = () => showToast('could not read file');
+  reader.onload = ev => {
+    const img = new Image();
+    img.onerror = () => showToast('could not decode image');
+    img.onload = () => {
+      // ── c) Draw ──────────────────────────────────────────
+      saveUndo();
+      ctx.fillStyle = '#0d0d14';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Pixel art: disable smoothing for crisp pixel-perfect rendering
+      const isPixelArt = img.width <= 256 && img.height <= 256;
+      ctx.imageSmoothingEnabled        = !isPixelArt;
+      ctx.mozImageSmoothingEnabled     = !isPixelArt;
+      ctx.webkitImageSmoothingEnabled  = !isPixelArt;
+      ctx.msImageSmoothingEnabled      = !isPixelArt;
+
+      // CONTAIN scaling — preserve aspect ratio, no crop, no stretch
+      const scale = Math.min(canvas.width / img.width, canvas.height / img.height);
+      const dx = (canvas.width  - img.width  * scale) / 2;
+      const dy = (canvas.height - img.height * scale) / 2;
+      ctx.drawImage(img, dx, dy, img.width * scale, img.height * scale);
+
+      // Re-enable smoothing for subsequent brush strokes
+      ctx.imageSmoothingEnabled        = true;
+      ctx.mozImageSmoothingEnabled     = true;
+      ctx.webkitImageSmoothingEnabled  = true;
+      ctx.msImageSmoothingEnabled      = true;
+
+      hasDrawn = true;
+      hint.style.opacity = '0';
+      updateUndoBadge();
+
+      // ── d) Import metadata in panel header ───────────────
+      const fname = file.name.length > 18 ? file.name.slice(0, 15) + '…' : file.name;
+      const engineLabel = document.querySelector('.ai-engine-label');
+      const _resetLabel = () => { engineLabel.textContent = 'pixel engine'; };
+      engineLabel.textContent = `${fname} · ${img.width}×${img.height}px`;
+      clearTimeout(_importMetaTimer);
+      _importMetaTimer = setTimeout(_resetLabel, 6000);
+      canvas.addEventListener('mousedown', () => { clearTimeout(_importMetaTimer); _resetLabel(); }, { once: true });
+
+      // ── e) Toast + rAF analyze + auto-play ───────────────
+      showToast('image loaded — composing music ♪');
+      requestAnimationFrame(() => {
+        const data = analyzeCanvas();
+        if (data) {
+          displayAnalysis(data);
+          Tone.start().then(() => startMusic(data));
+          setStatus('composing from image', 'playing');
+        }
+      });
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
 
 // Initialise brush cursor
 updateBrushCursor();
