@@ -1,4 +1,4 @@
-# Neural Style Composer
+# Synthesio
 
 **Paint music into existence.**
 
@@ -69,9 +69,9 @@ No build step. One file.
 ## Run it
 
 ```bash
-open neural-style-composer.html
+open index.html
 # or serve locally:
 python3 -m http.server 8080
 ```
 
-Live at: **[prithvi-0g.github.io/neural-style-composer](https://prithvi-0g.github.io/neural-style-composer)**
+Live at: **[prithvi-0g.github.io/synthesio](https://prithvi-0g.github.io/synthesio)**

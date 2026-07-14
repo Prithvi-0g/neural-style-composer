@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="description" content="Neural Style Composer — paint music into existence. Color becomes sound through a custom pixel analysis engine.">
-<title>Neural Style Composer — paint music into existence</title>
+<meta name="description" content="Synthesio — paint music into existence. Color becomes sound through a custom pixel analysis engine.">
+<title>Synthesio — paint music into existence</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/midi-writer-js@2.1.4/browser/midiwriter.min.js"></script>
 <style>
@@ -485,7 +485,7 @@
   <!-- Header -->
   <header>
     <div class="logo">
-      <em>NSC</em><span class="logo-sep"> / </span>Neural Style Composer
+      <em>SYN</em><span class="logo-sep"> / </span>Synthesio
     </div>
     <div class="header-status">
       <div class="pulse-dot" id="statusDot"></div>
@@ -1659,7 +1659,7 @@ document.getElementById('stopBtn').addEventListener('click', stopMusic);
 // Export PNG — only mainCanvas, no waveform overlay
 document.getElementById('exportBtn').addEventListener('click', () => {
   const link=document.createElement('a');
-  link.download='neural-style-composition.png';
+  link.download='synthesio-composition.png';
   link.href=canvas.toDataURL('image/png');
   link.click();
 });
@@ -1692,7 +1692,7 @@ document.getElementById('exportMidiBtn').addEventListener('click', () => {
     }
     const writer = new MidiWriter.Writer(track);
     const link = document.createElement('a');
-    link.download = 'neural-composition.mid';
+    link.download = 'synthesio-composition.mid';
     link.href = writer.dataUri();
     link.click();
     showToast('MIDI exported');
@@ -1744,7 +1744,7 @@ document.getElementById('scoreBtn').addEventListener('click', () => {
   if (p.density > 0.25) activeModes.push('counterpoint');
   if (seqRhythm.name !== 'straight') activeModes.push(`${seqRhythm.name} arpeggio`);
 
-  const text = `NEURAL STYLE COMPOSER — Composition Score
+  const text = `SYNTHESIO — Composition Score
 Generated: ${ts}
 
 Mood:       ${p.mood}
@@ -1771,7 +1771,7 @@ ${notes.map(n => '  ' + n).join('\n')}
 
   const blob = new Blob([text], { type: 'text/plain' });
   const link = document.createElement('a');
-  link.download = 'neural-composition-score.txt';
+  link.download = 'synthesio-composition-score.txt';
   link.href = URL.createObjectURL(blob);
   link.click();
   showToast('Score exported');
