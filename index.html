@@ -7,6 +7,7 @@
 <title>Synthesio — paint music into existence</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/midi-writer-js@2.1.4/browser/midiwriter.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Inter:wght@300;400;500;600&display=swap');
 
@@ -52,7 +53,7 @@
   .logo-sep { color: var(--border2); margin: 0 1px; }
 
   .header-status {
-    margin-left: auto; display: flex; align-items: center; gap: 8px;
+    display: flex; align-items: center; gap: 8px;
     font-size: 10px; font-family: 'Space Mono', monospace; color: var(--muted);
   }
   .pulse-dot {
@@ -478,6 +479,236 @@
   }
   .score-btn:hover { color: var(--text2); border-color: var(--border2); }
 
+  /* ── Mode Toggle ── */
+  .mode-toggle { display: flex; gap: 4px; margin-left: auto; }
+  .mode-pill {
+    font: 700 11px 'Space Mono'; letter-spacing: .08em;
+    padding: 6px 16px; border-radius: 20px; cursor: pointer;
+    border: 1px solid var(--border); background: transparent;
+    color: var(--muted); transition: all .15s;
+  }
+  .mode-pill.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .mode-pill:not(.active):hover { border-color: var(--border2); color: var(--text2); }
+
+  /* ── Sculptor overlay ── */
+  #sculptorMode {
+    position: fixed; inset: 0; z-index: 100; background: var(--bg);
+    display: none;
+    grid-template-rows: 48px 1fr 240px;
+    grid-template-columns: 200px 1fr 280px;
+  }
+  #sculptorMode.visible { display: grid; }
+
+  .sculpt-header {
+    grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; padding: 0 18px;
+    border-bottom: 1px solid var(--border); background: var(--surface);
+  }
+  .sculpt-back-btn {
+    font: 700 11px 'Space Mono'; color: var(--muted); background: transparent;
+    border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px;
+    cursor: pointer; transition: all .12s; letter-spacing: .06em;
+  }
+  .sculpt-back-btn:hover { color: var(--text2); border-color: var(--border2); }
+  .sculpt-title { font: 700 11px 'Space Mono'; color: var(--text2); letter-spacing: .12em; }
+  .sculpt-header-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+
+  /* Object Panel */
+  .sculpt-obj-panel {
+    border-right: 1px solid var(--border); background: var(--surface);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .panel-label {
+    font: 700 9px 'Space Mono'; color: var(--muted); letter-spacing: .12em;
+    padding: 10px 12px 6px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  .obj-inventory {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 5px;
+    padding: 8px; flex-shrink: 0;
+  }
+  .shape-card {
+    border: 1px solid var(--border); border-radius: 8px; padding: 8px 6px;
+    text-align: center; cursor: pointer; background: var(--bg);
+    transition: border-color .12s, background .12s;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+  }
+  .shape-card:hover { border-color: var(--accent); background: rgba(124,106,247,.04); }
+  .shape-card svg { width: 20px; height: 20px; color: var(--muted); display: block; }
+  .shape-card-label { font: 400 8px 'Space Mono'; color: var(--muted); }
+  .obj-list-header {
+    padding: 5px 12px; font: 700 9px 'Space Mono'; color: var(--muted);
+    letter-spacing: .1em; border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  .obj-list { flex: 1; overflow-y: auto; }
+  .obj-list::-webkit-scrollbar { width: 2px; }
+  .obj-list::-webkit-scrollbar-thumb { background: var(--border2); }
+  .obj-list-row {
+    display: flex; align-items: center; gap: 7px; padding: 5px 8px;
+    cursor: pointer; border-left: 2px solid transparent; transition: background .1s;
+  }
+  .obj-list-row:hover { background: rgba(255,255,255,.03); }
+  .obj-list-row.selected { background: rgba(124,106,247,.1); border-left-color: var(--accent); }
+  .obj-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .obj-row-name { flex: 1; font: 400 9px 'Space Mono'; color: var(--text2); }
+  .obj-del-btn {
+    font: 400 10px 'Space Mono'; color: var(--muted); background: none;
+    border: none; cursor: pointer; padding: 1px 4px; border-radius: 3px;
+    transition: color .1s; line-height: 1;
+  }
+  .obj-del-btn:hover { color: #ef4444; }
+  .clear-scene-btn {
+    margin: 6px 8px; padding: 6px; border-radius: 6px;
+    border: 1px solid var(--border); background: transparent;
+    color: var(--muted); font: 400 9px 'Space Mono'; letter-spacing: .06em;
+    cursor: pointer; transition: all .15s; flex-shrink: 0;
+  }
+  .clear-scene-btn:hover { color: #ef4444; border-color: rgba(239,68,68,.4); }
+
+  /* Viewport */
+  .sculpt-viewport { position: relative; overflow: hidden; background: #0d0d14; }
+  #sculptorCanvas { display: block; position: absolute; inset: 0; }
+
+  /* Properties Panel */
+  .sculpt-props-panel {
+    border-left: 1px solid var(--border); background: var(--surface);
+    overflow-y: auto; display: flex; flex-direction: column;
+  }
+  .sculpt-props-panel::-webkit-scrollbar { width: 3px; }
+  .sculpt-props-panel::-webkit-scrollbar-thumb { background: var(--border2); }
+  .props-empty {
+    flex: 1; display: flex; align-items: center; justify-content: center;
+    font: 400 10px 'Space Mono'; color: var(--muted); padding: 20px; text-align: center;
+  }
+  .props-section { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+  .props-section-label {
+    font: 700 9px 'Space Mono'; color: var(--muted); letter-spacing: .1em; margin-bottom: 7px;
+  }
+  .transform-row { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; }
+  .transform-label { font: 400 9px 'Space Mono'; color: var(--muted); min-width: 50px; }
+  .xyz-inputs { display: flex; gap: 3px; }
+  .xyz-input {
+    width: 52px; font: 400 11px 'Space Mono'; background: var(--bg);
+    border: 1px solid var(--border); color: var(--text); border-radius: 4px;
+    padding: 3px 4px; text-align: right; -moz-appearance: textfield;
+  }
+  .xyz-input::-webkit-outer-spin-button, .xyz-input::-webkit-inner-spin-button { -webkit-appearance: none; }
+  .xyz-input:focus { outline: none; border-color: var(--accent); }
+  .material-row { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+  .material-label { font: 400 9px 'Space Mono'; color: var(--muted); min-width: 62px; }
+  .material-color-swatch {
+    width: 22px; height: 22px; border-radius: 4px; cursor: pointer;
+    border: 1px solid var(--border2); background: none; padding: 1px;
+  }
+  .toggle-btn {
+    font: 400 9px 'Space Mono'; color: var(--muted); background: transparent;
+    border: 1px solid var(--border); border-radius: 4px; padding: 2px 7px;
+    cursor: pointer; transition: all .12s;
+  }
+  .toggle-btn.active { color: var(--accent); border-color: rgba(124,106,247,.4); background: rgba(124,106,247,.08); }
+  .role-pills { display: flex; gap: 4px; flex-wrap: wrap; }
+  .role-pill {
+    font: 400 9px 'Space Mono'; color: var(--muted); background: transparent;
+    border: 1px solid var(--border); border-radius: 12px; padding: 3px 8px;
+    cursor: pointer; transition: all .12s;
+  }
+  .role-pill.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .audio-slider-row { display: flex; align-items: center; gap: 7px; margin-bottom: 4px; }
+  .audio-slider-label { font: 400 9px 'Space Mono'; color: var(--muted); min-width: 42px; }
+  .audio-slider-val { font: 400 10px 'Space Mono'; color: var(--text2); min-width: 32px; text-align: right; }
+  .active-toggle-btn {
+    width: 100%; padding: 6px; border-radius: 6px; border: 1px solid var(--border);
+    background: transparent; color: var(--muted); font: 400 10px 'Space Mono';
+    letter-spacing: .06em; cursor: pointer; transition: all .15s; margin-top: 5px;
+  }
+  .active-toggle-btn.is-active {
+    color: var(--pulse); border-color: rgba(61,214,140,.4); background: rgba(61,214,140,.06);
+  }
+
+  /* Audio Workstation */
+  .sculpt-workstation {
+    grid-column: 1 / -1; border-top: 1px solid var(--border); background: var(--surface);
+    display: grid; grid-template-columns: 300px 1fr 160px; overflow: hidden;
+  }
+  .eq-zone {
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; padding: 8px 10px; gap: 5px;
+  }
+  .workstation-label { font: 700 9px 'Space Mono'; color: var(--muted); letter-spacing: .1em; }
+  #eqCanvas { border-radius: 4px; background: var(--bg); flex-shrink: 0; }
+  .eq-sliders { display: flex; gap: 2px; align-items: flex-end; }
+  .eq-band { display: flex; flex-direction: column; align-items: center; gap: 2px; flex: 1; }
+  .eq-band input[type=range] {
+    -webkit-appearance: slider-vertical; writing-mode: vertical-lr; direction: rtl;
+    width: 18px; height: 50px; flex: none; padding: 0;
+    background: linear-gradient(to top, var(--accent) 0%, var(--accent) var(--fill,50%), var(--border2) var(--fill,50%), var(--border2) 100%);
+  }
+  .eq-band-label { font: 400 6px 'Space Mono'; color: var(--muted); white-space: nowrap; }
+
+  .mixer-zone {
+    border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden;
+  }
+  .mixer-strips {
+    display: flex; overflow-x: auto; flex: 1; align-items: stretch;
+  }
+  .mixer-strips::-webkit-scrollbar { height: 2px; }
+  .mixer-strips::-webkit-scrollbar-thumb { background: var(--border2); }
+  .mixer-strip {
+    width: 60px; flex-shrink: 0; border-right: 1px solid var(--border);
+    background: var(--bg); display: flex; flex-direction: column;
+    align-items: center; padding: 5px 3px; gap: 4px; cursor: pointer;
+    transition: background .1s;
+  }
+  .mixer-strip:hover { background: rgba(255,255,255,.02); }
+  .mixer-strip.selected { box-shadow: inset 0 0 0 1px var(--accent); }
+  .mixer-active-dot {
+    width: 7px; height: 7px; border-radius: 50%; border: 1px solid var(--border2);
+    transition: background .12s, box-shadow .12s; flex-shrink: 0;
+  }
+  .mixer-active-dot.on { background: var(--pulse); box-shadow: 0 0 4px var(--pulse); }
+  .mixer-role-tag {
+    font: 400 7px 'Space Mono'; color: var(--muted); background: var(--surface);
+    border: 1px solid var(--border); border-radius: 3px; padding: 0 3px;
+  }
+  .mixer-vu { display: flex; gap: 2px; align-items: flex-end; height: 32px; width: 36px; }
+  .mixer-vu-bar { flex: 1; border-radius: 1px; background: var(--border); min-height: 2px; }
+  .mixer-fader {
+    -webkit-appearance: slider-vertical; writing-mode: vertical-lr; direction: rtl;
+    width: 16px; height: 44px; flex: none; padding: 0;
+    background: linear-gradient(to top, var(--pulse) 0%, var(--pulse) var(--fill,75%), var(--border2) var(--fill,75%), var(--border2) 100%);
+  }
+  .mixer-name {
+    font: 400 7px 'Space Mono'; color: var(--muted); text-align: center;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 54px;
+  }
+
+  .transport-zone { display: flex; flex-direction: column; padding: 8px 12px; gap: 6px; overflow: hidden; }
+  .transport-title { font: 700 9px 'Space Mono'; color: var(--accent); letter-spacing: .1em; }
+  .transport-row { display: flex; align-items: center; gap: 6px; }
+  .transport-key { font: 400 9px 'Space Mono'; color: var(--muted); min-width: 28px; }
+  .transport-val { font: 400 9px 'Space Mono'; color: var(--text2); min-width: 46px; text-align: right; }
+  .key-select {
+    flex: 1; font: 400 10px 'Space Mono'; background: var(--bg);
+    border: 1px solid var(--border); color: var(--text2); border-radius: 4px; padding: 2px 4px;
+  }
+  .transport-btns { display: flex; gap: 5px; }
+  .transport-play {
+    flex: 1; padding: 6px; border-radius: 6px; background: var(--accent);
+    border: none; color: #fff; font: 700 9px 'Space Mono'; cursor: pointer; transition: opacity .12s;
+  }
+  .transport-play:hover { opacity: .85; }
+  .transport-stop {
+    flex: 1; padding: 6px; border-radius: 6px; background: var(--warn);
+    border: none; color: #fff; font: 700 9px 'Space Mono'; cursor: pointer; transition: opacity .12s;
+  }
+  .transport-stop:hover { opacity: .85; }
+  .step-counter { font: 400 8px 'Space Mono'; color: var(--muted); }
+  .sculpt-tap-btn {
+    font: 700 8px 'Space Mono'; color: var(--muted); background: transparent;
+    border: 1px solid var(--border); border-radius: 3px; padding: 2px 6px;
+    cursor: pointer; transition: all .12s; letter-spacing: .04em;
+  }
+  .sculpt-tap-btn:hover { color: var(--text2); border-color: var(--border2); }
+
   /* ── Drop zone overlay ── */
   .drop-overlay {
     position: absolute; inset: 0; z-index: 40;
@@ -508,6 +739,10 @@
     <div class="header-status">
       <div class="pulse-dot" id="statusDot"></div>
       <span id="statusText">ready</span>
+    </div>
+    <div class="mode-toggle">
+      <button class="mode-pill active" id="modeCanvas">🎨 CANVAS</button>
+      <button class="mode-pill" id="modeSculptor">🧊 SCULPTOR</button>
     </div>
   </header>
 
@@ -698,6 +933,186 @@
 
 
 </div>
+
+<!-- ═══════════════════════════════════════════════════════
+     SCULPTOR MODE OVERLAY
+     ═══════════════════════════════════════════════════════ -->
+<div id="sculptorMode">
+
+  <!-- Sculptor Header -->
+  <div class="sculpt-header">
+    <button class="sculpt-back-btn" id="sculptBack">← CANVAS</button>
+    <span class="sculpt-title">SYNTHESIO · SCULPTOR</span>
+    <div class="header-status" style="margin-left:0">
+      <div class="pulse-dot" id="sculptStatusDot"></div>
+      <span id="sculptStatusText">ready</span>
+    </div>
+    <div class="sculpt-header-right">
+      <button class="action-btn" id="sculptExportMidi">Export MIDI</button>
+      <button class="action-btn" id="sculptExportPng">Export Scene PNG</button>
+    </div>
+  </div>
+
+  <!-- Object Panel -->
+  <div class="sculpt-obj-panel">
+    <div class="panel-label">OBJECTS</div>
+    <div class="obj-inventory" id="objInventory"></div>
+    <div class="obj-list-header">SCENE</div>
+    <div class="obj-list" id="objList"></div>
+    <button class="clear-scene-btn" id="clearSceneBtn">CLEAR SCENE</button>
+  </div>
+
+  <!-- 3D Viewport -->
+  <div class="sculpt-viewport" id="sculptViewport"></div>
+
+  <!-- Properties Panel -->
+  <div class="sculpt-props-panel" id="sculptPropsPanel">
+    <div class="props-empty" id="propsEmpty">select an object<br>to edit</div>
+    <div id="propsContent" style="display:none; flex-direction:column">
+      <div class="props-section">
+        <div class="props-section-label">TRANSFORM</div>
+        <div class="transform-row">
+          <span class="transform-label">position</span>
+          <div class="xyz-inputs">
+            <input class="xyz-input" id="propPX" type="number" step="0.1" value="0">
+            <input class="xyz-input" id="propPY" type="number" step="0.1" value="0">
+            <input class="xyz-input" id="propPZ" type="number" step="0.1" value="0">
+          </div>
+        </div>
+        <div class="transform-row">
+          <span class="transform-label">rotation°</span>
+          <div class="xyz-inputs">
+            <input class="xyz-input" id="propRX" type="number" step="1" value="0">
+            <input class="xyz-input" id="propRY" type="number" step="1" value="0">
+            <input class="xyz-input" id="propRZ" type="number" step="1" value="0">
+          </div>
+        </div>
+        <div class="transform-row">
+          <span class="transform-label">scale</span>
+          <div class="xyz-inputs">
+            <input class="xyz-input" id="propSX" type="number" step="0.1" value="1" min="0.01">
+            <input class="xyz-input" id="propSY" type="number" step="0.1" value="1" min="0.01">
+            <input class="xyz-input" id="propSZ" type="number" step="0.1" value="1" min="0.01">
+          </div>
+        </div>
+      </div>
+      <div class="props-section">
+        <div class="props-section-label">MATERIAL</div>
+        <div class="material-row">
+          <span class="material-label">color</span>
+          <input type="color" class="material-color-swatch" id="propColor" value="#7c6af7">
+        </div>
+        <div class="material-row">
+          <span class="material-label">metalness</span>
+          <input type="range" id="propMetal" min="0" max="1" step="0.01" value="0" style="flex:1">
+          <span class="audio-slider-val" id="propMetalVal">0.00</span>
+        </div>
+        <div class="material-row">
+          <span class="material-label">roughness</span>
+          <input type="range" id="propRough" min="0" max="1" step="0.01" value="0.5" style="flex:1">
+          <span class="audio-slider-val" id="propRoughVal">0.50</span>
+        </div>
+        <div class="material-row">
+          <span class="material-label">opacity</span>
+          <input type="range" id="propOpacity" min="0" max="1" step="0.01" value="1" style="flex:1">
+          <span class="audio-slider-val" id="propOpacityVal">1.00</span>
+        </div>
+        <div class="material-row">
+          <span class="material-label">wireframe</span>
+          <button class="toggle-btn" id="propWireframe">off</button>
+        </div>
+      </div>
+      <div class="props-section">
+        <div class="props-section-label">SOUND ROLE</div>
+        <div class="role-pills" id="rolePills">
+          <button class="role-pill active" data-role="melody">melody</button>
+          <button class="role-pill" data-role="bass">bass</button>
+          <button class="role-pill" data-role="pad">pad</button>
+          <button class="role-pill" data-role="percussion">perc</button>
+          <button class="role-pill" data-role="arp">arp</button>
+        </div>
+      </div>
+      <div class="props-section">
+        <div class="props-section-label">AUDIO</div>
+        <div class="audio-slider-row">
+          <span class="audio-slider-label">PITCH</span>
+          <input type="range" id="propPitch" min="0" max="1" step="0.01" value="0.5" style="flex:1">
+          <span class="audio-slider-val" id="propPitchVal">0.50</span>
+        </div>
+        <div class="audio-slider-row">
+          <span class="audio-slider-label">VOLUME</span>
+          <input type="range" id="propVolume" min="0" max="1" step="0.01" value="0.75" style="flex:1">
+          <span class="audio-slider-val" id="propVolumeVal">0.75</span>
+        </div>
+        <div class="audio-slider-row">
+          <span class="audio-slider-label">PAN</span>
+          <input type="range" id="propPan" min="-1" max="1" step="0.01" value="0" style="flex:1">
+          <span class="audio-slider-val" id="propPanVal">0.00</span>
+        </div>
+        <div class="audio-slider-row">
+          <span class="audio-slider-label">ATTACK</span>
+          <input type="range" id="propAttack" min="0" max="1" step="0.01" value="0.1" style="flex:1">
+          <span class="audio-slider-val" id="propAttackVal">0.10</span>
+        </div>
+        <div class="audio-slider-row">
+          <span class="audio-slider-label">RELEASE</span>
+          <input type="range" id="propRelease" min="0" max="1" step="0.01" value="0.8" style="flex:1">
+          <span class="audio-slider-val" id="propReleaseVal">0.80</span>
+        </div>
+        <div class="audio-slider-row">
+          <span class="audio-slider-label">FILTER</span>
+          <input type="range" id="propFilter" min="0" max="1" step="0.01" value="1" style="flex:1">
+          <span class="audio-slider-val" id="propFilterVal">1.00</span>
+        </div>
+        <button class="active-toggle-btn is-active" id="propActiveToggle">● ACTIVE</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Audio Workstation -->
+  <div class="sculpt-workstation">
+    <div class="eq-zone">
+      <div class="workstation-label">MASTER EQ</div>
+      <canvas id="eqCanvas" width="276" height="100"></canvas>
+      <div class="eq-sliders" id="eqSliders"></div>
+    </div>
+    <div class="mixer-zone">
+      <div class="workstation-label" style="padding:6px 10px 3px">MIXER</div>
+      <div class="mixer-strips" id="mixerStrips"></div>
+    </div>
+    <div class="transport-zone">
+      <div class="transport-title">◆ SCULPTOR</div>
+      <div class="transport-row">
+        <span class="transport-key">TEMPO</span>
+        <input type="range" id="sculptTempo" min="40" max="220" value="120" style="flex:1">
+        <span class="transport-val" id="sculptTempoVal">120 BPM</span>
+      </div>
+      <div class="transport-row">
+        <button class="sculpt-tap-btn" id="sculptTap">TAP TEMPO</button>
+      </div>
+      <div class="transport-row">
+        <span class="transport-key">VOL</span>
+        <input type="range" id="sculptMasterVol" min="0" max="1" step="0.01" value="0.75" style="flex:1">
+        <span class="transport-val" id="sculptMasterVolVal">75%</span>
+      </div>
+      <div class="transport-row">
+        <span class="transport-key">KEY</span>
+        <select class="key-select" id="sculptKey">
+          <option>C</option><option>G</option><option>D</option><option>A</option>
+          <option>E</option><option>B</option><option>F#</option><option>Db</option>
+          <option>Ab</option><option>Eb</option><option>Bb</option><option>F</option>
+        </select>
+      </div>
+      <div class="transport-btns">
+        <button class="transport-play" id="sculptPlay">▶ PLAY</button>
+        <button class="transport-stop" id="sculptStop">■ STOP</button>
+      </div>
+      <div class="step-counter" id="stepCounter">step: 00/32</div>
+    </div>
+  </div>
+
+</div>
+
 <div id="colorTooltip"></div>
 <div id="toastContainer"></div>
 <script>
@@ -779,6 +1194,11 @@ function _updateTimerDisplay() {
   document.getElementById('paintTimer').textContent =
     Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
 }
+
+// ═══════════════════════════════════════════════════════════
+// MODE STATE
+// ═══════════════════════════════════════════════════════════
+let activeMode = 'canvas';
 
 // ═══════════════════════════════════════════════════════════
 // CANVAS SETUP
@@ -954,7 +1374,8 @@ function saveUndo() {
 // Keyboard shortcuts
 document.addEventListener('keydown', e => {
   const tag = e.target.tagName;
-  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+  if (activeMode !== 'canvas') return;
 
   // Space → play / stop
   if (e.code === 'Space') {
@@ -1957,6 +2378,988 @@ function _importImage(file) {
 
 // Initialise brush cursor
 updateBrushCursor();
+
+// ═══════════════════════════════════════════════════════════
+// SCULPTOR — STATE
+// ═══════════════════════════════════════════════════════════
+let sculptScene = null, sculptCamera = null, sculptRenderer = null;
+let sculptAnimId = null, sculptInitialized = false;
+let sculptAudioLight = null;
+let sceneObjects = [];       // {id,type,mesh,color,audioRole,pitch,volume,pan,attack,release,filterFreq,active,synth,filter,panner,analyser,baseScale,pulseFire,pulseTime}
+let selectedSculptObj = null;
+let sculptAudioNodes = [];
+let sculptMaster = null, sculptAnalyser = null;
+let sculptEQFilters = [];    // [lowShelf, midPeak, highShelf]
+let sculptSequencer = null;
+let sculptIsPlaying = false;
+let sculptStep = 0;
+let orbitState = { azimuth: 0.5, elevation: 0.45, radius: 12, target: {x:0,y:0,z:0} };
+let _sculptTransformMode = null; // 'grab'|'rotate'|'scale'|null
+let _sculptTapTimes = [];
+
+const OBJ_COLORS = [0x7c6af7,0xc084fc,0x4ade80,0xf97316,0x06b6d4,0xef4444];
+const EQ_LABELS  = ['60Hz','120Hz','500Hz','1kHz','2kHz','4kHz','8kHz','16kHz'];
+const KEY_SEMI   = {C:0,G:7,D:2,A:9,E:4,B:11,'F#':6,Db:1,Ab:8,Eb:3,Bb:10,F:5};
+const PENTA_OFF  = [0,2,4,7,9];
+
+// ═══════════════════════════════════════════════════════════
+// SCULPTOR — HELPERS
+// ═══════════════════════════════════════════════════════════
+function getSculptNotes() {
+  const key = document.getElementById('sculptKey').value;
+  const root = 48 + (KEY_SEMI[key] ?? 0);
+  const notes = [];
+  for (let o = 0; o < 3; o++)
+    PENTA_OFF.forEach(off => notes.push(Tone.Frequency(root + off + o*12,'midi').toNote()));
+  return notes;
+}
+
+function numColor(n) {
+  return '#' + n.toString(16).padStart(6,'0');
+}
+
+function sculptSetStatus(text, mode) {
+  const dot = document.getElementById('sculptStatusDot');
+  document.getElementById('sculptStatusText').textContent = text;
+  dot.className = 'pulse-dot' + (mode==='playing'?' playing': mode==='active'?' active':'');
+}
+
+// ═══════════════════════════════════════════════════════════
+// SCULPTOR — THREE.JS INIT
+// ═══════════════════════════════════════════════════════════
+function initSculptor() {
+  if (sculptInitialized) { if (!sculptAnimId) sculptAnimLoop(); return; }
+  sculptInitialized = true;
+
+  const vp = document.getElementById('sculptViewport');
+  const W = vp.clientWidth || 600, H = vp.clientHeight || 400;
+
+  sculptScene = new THREE.Scene();
+  sculptScene.background = new THREE.Color(0x0d0d14);
+
+  const grid = new THREE.GridHelper(20, 20, 0x1e1e2e, 0x1e1e2e);
+  sculptScene.add(grid);
+  sculptScene.add(new THREE.AmbientLight(0xffffff, 0.4));
+  const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+  dirLight.position.set(5,10,5); sculptScene.add(dirLight);
+
+  sculptAudioLight = new THREE.PointLight(0x7c6af7, 1.5, 30);
+  sculptAudioLight.position.set(0,5,0); sculptScene.add(sculptAudioLight);
+
+  sculptCamera = new THREE.PerspectiveCamera(60, W/H, 0.1, 1000);
+  sculptUpdateCamera();
+
+  sculptRenderer = new THREE.WebGLRenderer({ antialias:true, preserveDrawingBuffer:true });
+  sculptRenderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+  sculptRenderer.setSize(W,H);
+  sculptRenderer.domElement.id = 'sculptorCanvas';
+  vp.appendChild(sculptRenderer.domElement);
+
+  _buildInventory();
+  _buildEQSliders();
+  _setupViewportEvents();
+  _setupTransportEvents();
+  _setupPropsPanelEvents();
+
+  window.addEventListener('resize', _sculptResize);
+  sculptAnimLoop();
+}
+
+function sculptUpdateCamera() {
+  const { azimuth, elevation, radius, target } = orbitState;
+  sculptCamera.position.x = target.x + radius * Math.sin(azimuth) * Math.cos(elevation);
+  sculptCamera.position.y = target.y + radius * Math.sin(elevation);
+  sculptCamera.position.z = target.z + radius * Math.cos(azimuth) * Math.cos(elevation);
+  sculptCamera.lookAt(target.x, target.y, target.z);
+}
+
+function _sculptResize() {
+  if (!sculptRenderer) return;
+  const vp = document.getElementById('sculptViewport');
+  const W = vp.clientWidth, H = vp.clientHeight;
+  sculptRenderer.setSize(W, H);
+  sculptCamera.aspect = W / H;
+  sculptCamera.updateProjectionMatrix();
+}
+
+// ═══════════════════════════════════════════════════════════
+// SCULPTOR — SHAPE FACTORY
+// ═══════════════════════════════════════════════════════════
+function makeGeometry(type) {
+  switch(type) {
+    case 'sphere':   return new THREE.SphereGeometry(1,32,32);
+    case 'cube':     return new THREE.BoxGeometry(1.5,1.5,1.5);
+    case 'cone':     return new THREE.ConeGeometry(0.8,2,32);
+    case 'cylinder': return new THREE.CylinderGeometry(0.7,0.7,2,32);
+    case 'torus':    return new THREE.TorusGeometry(0.8,0.3,16,100);
+    case 'plane': {
+      const g = new THREE.PlaneGeometry(3,3);
+      g.rotateX(-Math.PI/2); return g;
+    }
+    default: return new THREE.BoxGeometry(1.5,1.5,1.5);
+  }
+}
+
+const SHAPE_ICONS = {
+  sphere:   '<circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/>',
+  cube:     '<rect x="5" y="5" width="12" height="12" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/>',
+  cone:     '<polygon points="11,4 18,18 4,18" fill="none" stroke="currentColor" stroke-width="1.5"/>',
+  cylinder: '<rect x="7" y="5" width="8" height="13" rx="4" fill="none" stroke="currentColor" stroke-width="1.5"/>',
+  torus:    '<circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="11" cy="11" r="3" fill="none" stroke="currentColor" stroke-width="1"/>',
+  plane:    '<rect x="3" y="9" width="16" height="5" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/>',
+};
+
+function _buildInventory() {
+  const inv = document.getElementById('objInventory');
+  inv.innerHTML = '';
+  ['sphere','cube','cone','cylinder','torus','plane'].forEach(type => {
+    const card = document.createElement('div');
+    card.className = 'shape-card';
+    card.innerHTML = `<svg viewBox="0 0 22 22">${SHAPE_ICONS[type]}</svg><span class="shape-card-label">${type}</span>`;
+    card.addEventListener('click', () => addSculptObject(type));
+    inv.appendChild(card);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// SCULPTOR — OBJECT MANAGEMENT
+// ═══════════════════════════════════════════════════════════
+function addSculptObject(type) {
+  if (sceneObjects.length >= 12) { showToast('scene limit reached (12 objects)'); return; }
+  const colorHex = OBJ_COLORS[sceneObjects.length % OBJ_COLORS.length];
+  const geo  = makeGeometry(type);
+  const mat  = new THREE.MeshStandardMaterial({ color: colorHex, metalness:0, roughness:0.5 });
+  const mesh = new THREE.Mesh(geo, mat);
+  // Slight random offset so objects don't stack exactly
+  mesh.position.set((Math.random()-0.5)*2, 0.5, (Math.random()-0.5)*2);
+  sculptScene.add(mesh);
+
+  const obj = {
+    id: Date.now() + Math.random(), type, mesh,
+    color: colorHex,
+    audioRole: 'melody', pitch:0.5, volume:0.75, pan:0,
+    attack:0.1, release:0.8, filterFreq:1.0, active:true,
+    synth:null, filter:null, panner:null, analyser:null,
+    baseScale:1, pulseFire:false, pulseTime:0,
+  };
+  sceneObjects.push(obj);
+
+  // If playing, build a synth voice immediately
+  if (sculptIsPlaying && sculptMaster) buildSynthVoice(obj);
+
+  refreshObjList();
+  refreshMixerStrips();
+  selectSculptObj(obj);
+}
+
+function deleteSculptObj(obj) {
+  // Remove from scene
+  sculptScene.remove(obj.mesh);
+  obj.mesh.geometry.dispose();
+  obj.mesh.material.dispose();
+  // Dispose audio
+  ['synth','filter','panner','analyser'].forEach(k => {
+    if (obj[k]) { try { obj[k].dispose(); } catch(e){} obj[k] = null; }
+  });
+  sceneObjects.splice(sceneObjects.indexOf(obj), 1);
+  if (selectedSculptObj === obj) selectSculptObj(null);
+  refreshObjList();
+  refreshMixerStrips();
+}
+
+function selectSculptObj(obj) {
+  // Remove outline from previously selected
+  if (selectedSculptObj) _removeOutline(selectedSculptObj.mesh);
+  selectedSculptObj = obj;
+  if (obj) _addOutline(obj.mesh);
+  refreshObjList();
+  refreshMixerStrips();
+  _loadPropsForObj(obj);
+}
+
+function _addOutline(mesh) {
+  _removeOutline(mesh);
+  const outline = new THREE.Mesh(
+    mesh.geometry,
+    new THREE.MeshBasicMaterial({ color:0x7c6af7, side: THREE.BackSide })
+  );
+  outline.scale.multiplyScalar(1.06);
+  outline.name = '__outline__';
+  mesh.add(outline);
+}
+
+function _removeOutline(mesh) {
+  const existing = mesh.children.find(c => c.name === '__outline__');
+  if (existing) { existing.geometry.dispose(); existing.material.dispose(); mesh.remove(existing); }
+}
+
+function refreshObjList() {
+  const list = document.getElementById('objList');
+  list.innerHTML = '';
+  sceneObjects.forEach((obj, i) => {
+    const row = document.createElement('div');
+    row.className = 'obj-list-row' + (obj === selectedSculptObj ? ' selected' : '');
+    const dotColor = numColor(obj.color);
+    row.innerHTML =
+      `<span class="obj-dot" style="background:${dotColor}"></span>` +
+      `<span class="obj-row-name">${obj.type} ${i+1}</span>` +
+      `<button class="obj-del-btn" title="delete">✕</button>`;
+    row.querySelector('.obj-del-btn').addEventListener('click', e => { e.stopPropagation(); deleteSculptObj(obj); });
+    row.addEventListener('click', () => selectSculptObj(obj));
+    list.appendChild(row);
+  });
+}
+
+function refreshMixerStrips() {
+  const strips = document.getElementById('mixerStrips');
+  strips.innerHTML = '';
+  sceneObjects.forEach((obj, i) => {
+    const strip = document.createElement('div');
+    strip.className = 'mixer-strip' + (obj === selectedSculptObj ? ' selected' : '');
+    strip.innerHTML =
+      `<div class="mixer-active-dot${obj.active?' on':''}" id="mvDot${i}"></div>` +
+      `<span class="mixer-role-tag">${obj.audioRole.slice(0,4)}</span>` +
+      `<div class="mixer-vu" id="mvVU${i}">` +
+        `<div class="mixer-vu-bar" id="mvB${i}a" style="height:4px"></div>` +
+        `<div class="mixer-vu-bar" id="mvB${i}b" style="height:4px"></div>` +
+        `<div class="mixer-vu-bar" id="mvB${i}c" style="height:4px"></div>` +
+        `<div class="mixer-vu-bar" id="mvB${i}d" style="height:4px"></div>` +
+      `</div>` +
+      `<input type="range" class="mixer-fader" min="0" max="1" step="0.01" value="${obj.volume}" title="volume">` +
+      `<span class="mixer-name">${obj.type} ${i+1}</span>`;
+    const fader = strip.querySelector('input[type=range]');
+    updateSliderFill(fader);
+    fader.addEventListener('input', () => {
+      obj.volume = +fader.value;
+      updateSliderFill(fader);
+      if (obj.synth) _applyVolumeToSynth(obj);
+      if (selectedSculptObj === obj) {
+        document.getElementById('propVolume').value = obj.volume;
+        document.getElementById('propVolumeVal').textContent = obj.volume.toFixed(2);
+        updateSliderFill(document.getElementById('propVolume'));
+      }
+    });
+    strip.addEventListener('click', e => { if (e.target !== fader) selectSculptObj(obj); });
+    strips.appendChild(strip);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// SCULPTOR — VIEWPORT EVENTS
+// ═══════════════════════════════════════════════════════════
+function _setupViewportEvents() {
+  const vp = document.getElementById('sculptViewport');
+  let isOrbiting = false, isPanning = false;
+  let startX = 0, startY = 0, moved = false;
+  let txBase = null;
+
+  vp.addEventListener('mousedown', e => {
+    e.preventDefault();
+    startX = e.clientX; startY = e.clientY; moved = false;
+    if (e.button === 1 || (e.button === 0 && e.altKey)) { isPanning = true; return; }
+    if (e.button === 0) {
+      if (_sculptTransformMode && selectedSculptObj) {
+        txBase = {
+          pos: selectedSculptObj.mesh.position.clone(),
+          rot: selectedSculptObj.mesh.rotation.clone(),
+          scl: selectedSculptObj.mesh.scale.clone(),
+          sx: e.clientX, sy: e.clientY,
+        };
+        return;
+      }
+      isOrbiting = true;
+    }
+  });
+
+  function onMove(e) {
+    const dx = e.clientX - startX, dy = e.clientY - startY;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) moved = true;
+    if (isOrbiting) {
+      orbitState.azimuth -= dx * 0.005;
+      orbitState.elevation = Math.max(-1.4, Math.min(1.4, orbitState.elevation + dy * 0.005));
+      startX = e.clientX; startY = e.clientY;
+      sculptUpdateCamera();
+    }
+    if (isPanning) {
+      const right = new THREE.Vector3().setFromMatrixColumn(sculptCamera.matrix, 0);
+      const up    = new THREE.Vector3().setFromMatrixColumn(sculptCamera.matrix, 1);
+      const s = dx * 0.02;
+      const t = dy * 0.02;
+      orbitState.target.x -= right.x*s - up.x*t;
+      orbitState.target.y -= right.y*s - up.y*t;
+      orbitState.target.z -= right.z*s - up.z*t;
+      startX = e.clientX; startY = e.clientY;
+      sculptUpdateCamera();
+    }
+    if (txBase && _sculptTransformMode && selectedSculptObj) {
+      const ddx = e.clientX - txBase.sx, ddy = e.clientY - txBase.sy;
+      if (_sculptTransformMode === 'grab') {
+        selectedSculptObj.mesh.position.x = txBase.pos.x + ddx * 0.02;
+        selectedSculptObj.mesh.position.z = txBase.pos.z + ddy * 0.02;
+      } else if (_sculptTransformMode === 'rotate') {
+        selectedSculptObj.mesh.rotation.y = txBase.rot.y + ddx * 0.01;
+      } else if (_sculptTransformMode === 'scale') {
+        const s = Math.max(0.01, 1 + ddx * 0.005);
+        selectedSculptObj.mesh.scale.setScalar(txBase.scl.x * s);
+      }
+      _syncPropsFromObj(selectedSculptObj);
+    }
+  }
+
+  function onUp(e) {
+    const wasOrbiting = isOrbiting;
+    isOrbiting = false; isPanning = false; txBase = null;
+    if (wasOrbiting && !moved && e.button === 0) {
+      _handleViewportClick(e);
+    }
+  }
+
+  window.addEventListener('mousemove', onMove);
+  window.addEventListener('mouseup',   onUp);
+
+  vp.addEventListener('wheel', e => {
+    e.preventDefault();
+    orbitState.radius = Math.max(3, Math.min(30, orbitState.radius + (e.deltaY > 0 ? 1 : -1)));
+    sculptUpdateCamera();
+  }, { passive: false });
+
+  // Drag selected object on XZ plane
+  vp.addEventListener('mousemove', e => {
+    if (!selectedSculptObj || !_sculptTransformMode) return;
+  });
+
+  vp.addEventListener('contextmenu', e => e.preventDefault());
+}
+
+function _handleViewportClick(e) {
+  const vp = document.getElementById('sculptViewport');
+  const rect = vp.getBoundingClientRect();
+  const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+  const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+  const rc = new THREE.Raycaster();
+  rc.setFromCamera(new THREE.Vector2(x, y), sculptCamera);
+  const meshes = sceneObjects.map(o => o.mesh);
+  const hits = rc.intersectObjects(meshes, false);
+  if (hits.length) {
+    const hit = sceneObjects.find(o => o.mesh === hits[0].object);
+    if (hit) { selectSculptObj(hit); return; }
+  }
+  selectSculptObj(null);
+}
+
+// ═══════════════════════════════════════════════════════════
+// SCULPTOR — PROPERTIES PANEL
+// ═══════════════════════════════════════════════════════════
+function _loadPropsForObj(obj) {
+  const empty   = document.getElementById('propsEmpty');
+  const content = document.getElementById('propsContent');
+  if (!obj) {
+    empty.style.display   = '';
+    content.style.display = 'none';
+    return;
+  }
+  empty.style.display   = 'none';
+  content.style.display = 'flex';
+  _syncPropsFromObj(obj);
+}
+
+function _syncPropsFromObj(obj) {
+  if (!obj) return;
+  const m = obj.mesh;
+  const r2d = v => Math.round(v * 180 / Math.PI);
+  const f2 = v => v.toFixed(2);
+
+  document.getElementById('propPX').value = m.position.x.toFixed(2);
+  document.getElementById('propPY').value = m.position.y.toFixed(2);
+  document.getElementById('propPZ').value = m.position.z.toFixed(2);
+  document.getElementById('propRX').value = r2d(m.rotation.x);
+  document.getElementById('propRY').value = r2d(m.rotation.y);
+  document.getElementById('propRZ').value = r2d(m.rotation.z);
+  document.getElementById('propSX').value = m.scale.x.toFixed(2);
+  document.getElementById('propSY').value = m.scale.y.toFixed(2);
+  document.getElementById('propSZ').value = m.scale.z.toFixed(2);
+
+  const mat = m.material;
+  document.getElementById('propColor').value   = '#' + mat.color.getHexString();
+  document.getElementById('propMetal').value   = mat.metalness;
+  document.getElementById('propMetalVal').textContent = f2(mat.metalness);
+  document.getElementById('propRough').value   = mat.roughness;
+  document.getElementById('propRoughVal').textContent = f2(mat.roughness);
+  document.getElementById('propOpacity').value = mat.opacity;
+  document.getElementById('propOpacityVal').textContent = f2(mat.opacity);
+  document.getElementById('propWireframe').textContent = mat.wireframe ? 'on' : 'off';
+  document.getElementById('propWireframe').classList.toggle('active', mat.wireframe);
+
+  document.querySelectorAll('#rolePills .role-pill').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.role === obj.audioRole);
+  });
+
+  document.getElementById('propPitch').value   = obj.pitch;
+  document.getElementById('propPitchVal').textContent  = f2(obj.pitch);
+  document.getElementById('propVolume').value  = obj.volume;
+  document.getElementById('propVolumeVal').textContent = f2(obj.volume);
+  document.getElementById('propPan').value     = obj.pan;
+  document.getElementById('propPanVal').textContent    = f2(obj.pan);
+  document.getElementById('propAttack').value  = obj.attack;
+  document.getElementById('propAttackVal').textContent = f2(obj.attack);
+  document.getElementById('propRelease').value = obj.release;
+  document.getElementById('propReleaseVal').textContent = f2(obj.release);
+  document.getElementById('propFilter').value  = obj.filterFreq;
+  document.getElementById('propFilterVal').textContent  = f2(obj.filterFreq);
+
+  const atBtn = document.getElementById('propActiveToggle');
+  atBtn.textContent = obj.active ? '● ACTIVE' : '○ MUTED';
+  atBtn.classList.toggle('is-active', obj.active);
+
+  // Re-sync slider fills
+  ['propMetal','propRough','propOpacity','propPitch','propVolume','propPan','propAttack','propRelease','propFilter']
+    .forEach(id => updateSliderFill(document.getElementById(id)));
+}
+
+function _setupPropsPanelEvents() {
+  // Transform
+  const posIds = ['propPX','propPY','propPZ'];
+  const rotIds = ['propRX','propRY','propRZ'];
+  const sclIds = ['propSX','propSY','propSZ'];
+  posIds.forEach((id, i) => {
+    document.getElementById(id).addEventListener('input', () => {
+      if (!selectedSculptObj) return;
+      selectedSculptObj.mesh.position.setComponent(i, +document.getElementById(id).value);
+    });
+  });
+  rotIds.forEach((id, i) => {
+    document.getElementById(id).addEventListener('input', () => {
+      if (!selectedSculptObj) return;
+      const deg = +document.getElementById(id).value;
+      selectedSculptObj.mesh.rotation['xyz'[i]] = deg * Math.PI / 180;
+    });
+  });
+  sclIds.forEach((id, i) => {
+    document.getElementById(id).addEventListener('input', () => {
+      if (!selectedSculptObj) return;
+      selectedSculptObj.mesh.scale.setComponent(i, Math.max(0.01, +document.getElementById(id).value));
+    });
+  });
+
+  // Material
+  document.getElementById('propColor').addEventListener('input', e => {
+    if (!selectedSculptObj) return;
+    selectedSculptObj.mesh.material.color.set(e.target.value);
+    selectedSculptObj.color = parseInt(e.target.value.replace('#',''), 16);
+    refreshObjList(); refreshMixerStrips();
+  });
+  [['propMetal','metalness','propMetalVal'],
+   ['propRough','roughness','propRoughVal'],
+   ['propOpacity','opacity','propOpacityVal']].forEach(([id, prop, valId]) => {
+    document.getElementById(id).addEventListener('input', e => {
+      if (!selectedSculptObj) return;
+      selectedSculptObj.mesh.material[prop] = +e.target.value;
+      if (prop === 'opacity') selectedSculptObj.mesh.material.transparent = +e.target.value < 1;
+      document.getElementById(valId).textContent = (+e.target.value).toFixed(2);
+      updateSliderFill(e.target);
+    });
+  });
+  document.getElementById('propWireframe').addEventListener('click', () => {
+    if (!selectedSculptObj) return;
+    selectedSculptObj.mesh.material.wireframe = !selectedSculptObj.mesh.material.wireframe;
+    document.getElementById('propWireframe').textContent = selectedSculptObj.mesh.material.wireframe ? 'on' : 'off';
+    document.getElementById('propWireframe').classList.toggle('active', selectedSculptObj.mesh.material.wireframe);
+  });
+
+  // Audio role
+  document.querySelectorAll('#rolePills .role-pill').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!selectedSculptObj) return;
+      selectedSculptObj.audioRole = btn.dataset.role;
+      document.querySelectorAll('#rolePills .role-pill').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      if (sculptIsPlaying && sculptMaster) buildSynthVoice(selectedSculptObj);
+      refreshMixerStrips();
+    });
+  });
+
+  // Audio sliders
+  const audioBindings = [
+    ['propPitch',  'propPitchVal',  (v,o) => { o.pitch = v; }],
+    ['propVolume', 'propVolumeVal', (v,o) => { o.volume = v; _applyVolumeToSynth(o); }],
+    ['propPan',    'propPanVal',    (v,o) => { o.pan = v; if (o.panner) o.panner.pan.value = v; }],
+    ['propAttack', 'propAttackVal', (v,o) => { o.attack = v; }],
+    ['propRelease','propReleaseVal',(v,o) => { o.release = v; }],
+    ['propFilter', 'propFilterVal', (v,o) => { o.filterFreq = v; if (o.filter) o.filter.frequency.value = 200 + v*7800; }],
+  ];
+  audioBindings.forEach(([id, valId, fn]) => {
+    document.getElementById(id).addEventListener('input', e => {
+      if (!selectedSculptObj) return;
+      const v = +e.target.value;
+      fn(v, selectedSculptObj);
+      document.getElementById(valId).textContent = v.toFixed(2);
+      updateSliderFill(e.target);
+    });
+  });
+
+  // Active toggle
+  document.getElementById('propActiveToggle').addEventListener('click', () => {
+    if (!selectedSculptObj) return;
+    selectedSculptObj.active = !selectedSculptObj.active;
+    const btn = document.getElementById('propActiveToggle');
+    btn.textContent = selectedSculptObj.active ? '● ACTIVE' : '○ MUTED';
+    btn.classList.toggle('is-active', selectedSculptObj.active);
+    if (selectedSculptObj.synth) {
+      selectedSculptObj.synth.volume.value = selectedSculptObj.active ? _objVolDB(selectedSculptObj) : -Infinity;
+    }
+    refreshMixerStrips();
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// SCULPTOR — AUDIO ARCHITECTURE
+// ═══════════════════════════════════════════════════════════
+function _objVolDB(obj) { return -20 + obj.volume * 14; }
+function _applyVolumeToSynth(obj) {
+  if (obj.synth) obj.synth.volume.value = obj.active ? _objVolDB(obj) : -Infinity;
+}
+
+function buildSynthVoice(obj) {
+  // Dispose previous
+  ['synth','filter','panner','analyser'].forEach(k => {
+    if (obj[k]) {
+      const idx = sculptAudioNodes.indexOf(obj[k]);
+      if (idx > -1) sculptAudioNodes.splice(idx, 1);
+      try { obj[k].dispose(); } catch(e){}
+      obj[k] = null;
+    }
+  });
+  if (!sculptMaster) return;
+
+  const attackSec  = 0.001 * Math.pow(2000, obj.attack);
+  const releaseSec = 0.1   * Math.pow(40,   obj.release);
+  const vol = obj.active ? _objVolDB(obj) : -Infinity;
+
+  let synth;
+  try {
+    if (obj.audioRole === 'melody') {
+      synth = new Tone.PolySynth(Tone.Synth, {
+        oscillator:{type:'triangle'}, volume:vol,
+        envelope:{attack:attackSec,decay:0.1,sustain:0.7,release:releaseSec},
+      });
+    } else if (obj.audioRole === 'bass') {
+      synth = new Tone.Synth({
+        oscillator:{type:'sine'}, volume:vol,
+        envelope:{attack:attackSec,decay:0.3,sustain:0.5,release:releaseSec},
+      });
+    } else if (obj.audioRole === 'pad') {
+      synth = new Tone.PolySynth(Tone.Synth, {
+        oscillator:{type:'sine'}, volume:vol,
+        envelope:{attack:Math.max(0.5,attackSec),decay:0.1,sustain:0.8,release:Math.max(2,releaseSec)},
+      });
+    } else if (obj.audioRole === 'percussion') {
+      synth = new Tone.MembraneSynth({ pitchDecay:0.05, octaves:6, volume:vol,
+        envelope:{attack:0.001,decay:0.4,sustain:0,release:0.1} });
+    } else {
+      synth = new Tone.Synth({
+        oscillator:{type:'sawtooth'}, volume:vol,
+        envelope:{attack:attackSec,decay:0.1,sustain:0.5,release:releaseSec},
+      });
+    }
+  } catch(e) { return; }
+
+  const filterF = 200 + obj.filterFreq * 7800;
+  const filter  = new Tone.Filter(filterF, 'lowpass');
+  const panner  = new Tone.Panner(obj.pan);
+  const analyser = new Tone.Analyser('waveform', 32);
+
+  synth.chain(filter, panner, analyser, sculptMaster);
+
+  obj.synth = synth; obj.filter = filter; obj.panner = panner; obj.analyser = analyser;
+  sculptAudioNodes.push(synth, filter, panner, analyser);
+}
+
+function startSculptorAudio() {
+  if (sculptIsPlaying) return;
+  Tone.start().then(() => {
+    // Master chain: 3 EQ filters → gain → analyser → destination
+    const low = new Tone.BiquadFilter(120, 'lowshelf');
+    const mid = new Tone.BiquadFilter(1000, 'peaking');
+    const high= new Tone.BiquadFilter(8000, 'highshelf');
+    sculptEQFilters = [low, mid, high];
+    sculptMaster  = new Tone.Gain(+document.getElementById('sculptMasterVol').value);
+    sculptAnalyser = new Tone.Analyser('waveform', 256);
+    low.chain(mid, high, sculptMaster, sculptAnalyser, Tone.getDestination());
+    sculptAudioNodes.push(low, mid, high, sculptMaster, sculptAnalyser);
+
+    _applyEQValues();
+    sceneObjects.forEach(obj => buildSynthVoice(obj));
+
+    const bpm = +document.getElementById('sculptTempo').value;
+    Tone.getTransport().bpm.value = bpm;
+    sculptStep = 0;
+
+    sculptSequencer = new Tone.Sequence((time, step) => {
+      sculptStep = step;
+      requestAnimationFrame(() => {
+        document.getElementById('stepCounter').textContent =
+          `step: ${String(step).padStart(2,'0')}/32`;
+      });
+      const notes = getSculptNotes();
+      sceneObjects.forEach(obj => {
+        if (!obj.active || !obj.synth) return;
+        const role = obj.audioRole;
+        let fire = false;
+        if      (role==='melody')     fire = (step%4===0) || Math.random()<0.3;
+        else if (role==='bass')       fire = [0,8,16,24].includes(step);
+        else if (role==='pad')        fire = step===0 || step===16;
+        else if (role==='percussion') fire = step%4===0;
+        else if (role==='arp')        fire = true;
+        if (!fire) return;
+        const idx  = Math.round(obj.pitch*(notes.length-1));
+        const note = notes[Math.max(0,Math.min(notes.length-1,idx))];
+        const dur  = role==='bass'?'2n': role==='pad'?'1n': role==='percussion'?'16n': '8n';
+        try { obj.synth.triggerAttackRelease(note, dur, time); } catch(e){}
+        obj.pulseFire = true; obj.pulseTime = Tone.now();
+      });
+    }, [...Array(32).keys()], '16n');
+
+    sculptSequencer.start(0);
+    Tone.getTransport().start('+0.1');
+    sculptIsPlaying = true;
+    sculptSetStatus('playing','playing');
+  });
+}
+
+function teardownSculptorAudio() {
+  if (sculptSequencer) {
+    try { sculptSequencer.stop(); sculptSequencer.dispose(); } catch(e){}
+    sculptSequencer = null;
+  }
+  sculptAudioNodes.forEach(n => { try { n.dispose(); } catch(e){} });
+  sculptAudioNodes = []; sculptEQFilters = [];
+  sculptMaster = null; sculptAnalyser = null;
+  sceneObjects.forEach(obj => {
+    ['synth','filter','panner','analyser'].forEach(k => { obj[k] = null; });
+  });
+  if (!isPlaying) { try { Tone.getTransport().stop(); } catch(e){} }
+  sculptIsPlaying = false;
+  sculptSetStatus('ready');
+  document.getElementById('stepCounter').textContent = 'step: 00/32';
+}
+
+// ═══════════════════════════════════════════════════════════
+// SCULPTOR — EQ
+// ═══════════════════════════════════════════════════════════
+const EQ_DEFAULTS = [0,0,0,0,0,0,0,0]; // dB per band
+
+function _buildEQSliders() {
+  const container = document.getElementById('eqSliders');
+  container.innerHTML = '';
+  EQ_LABELS.forEach((label, i) => {
+    const band = document.createElement('div');
+    band.className = 'eq-band';
+    const sl = document.createElement('input');
+    sl.type = 'range'; sl.min='-12'; sl.max='12'; sl.step='0.5'; sl.value='0';
+    sl.id = `eqBand${i}`;
+    updateSliderFill(sl);
+    sl.addEventListener('input', () => { updateSliderFill(sl); _applyEQValues(); });
+    const lbl = document.createElement('span');
+    lbl.className = 'eq-band-label'; lbl.textContent = label;
+    band.appendChild(sl); band.appendChild(lbl);
+    container.appendChild(band);
+  });
+}
+
+function _applyEQValues() {
+  if (!sculptEQFilters.length) return;
+  const vals = Array.from({length:8}, (_,i) => +( document.getElementById('eqBand'+i)?.value ?? 0 ));
+  const lowGain  = (vals[0] + vals[1]) / 2;
+  const midGain  = (vals[2] + vals[3] + vals[4]) / 3;
+  const highGain = (vals[5] + vals[6] + vals[7]) / 3;
+  try {
+    sculptEQFilters[0].gain.value = lowGain;
+    sculptEQFilters[1].gain.value = midGain;
+    sculptEQFilters[2].gain.value = highGain;
+  } catch(e){}
+}
+
+function drawEQCanvas() {
+  const cv = document.getElementById('eqCanvas');
+  if (!cv) return;
+  const ctx2 = cv.getContext('2d');
+  const W = cv.width, H = cv.height;
+  ctx2.clearRect(0,0,W,H);
+
+  if (sculptAnalyser) {
+    const data = sculptAnalyser.getValue();
+    // Waveform line
+    ctx2.beginPath();
+    ctx2.strokeStyle = 'rgba(124,106,247,0.7)';
+    ctx2.lineWidth = 1.5;
+    const wH = H * 0.55;
+    for (let i = 0; i < data.length; i++) {
+      const x = (i / (data.length-1)) * W;
+      const y = wH/2 + data[i] * wH * 0.5;
+      i===0 ? ctx2.moveTo(x,y) : ctx2.lineTo(x,y);
+    }
+    ctx2.stroke();
+
+    // 8 frequency bars from data bands
+    const bands = 8;
+    const bW = (W - (bands+1)*3) / bands;
+    const barAreaH = H * 0.4;
+    const barY = H - 2;
+    const bandSize = Math.floor(data.length / bands);
+    for (let b = 0; b < bands; b++) {
+      let sum = 0;
+      for (let k = b*bandSize; k < (b+1)*bandSize; k++) sum += Math.abs(data[k]);
+      const avg = sum / bandSize;
+      const bh = Math.min(barAreaH, avg * barAreaH * 3);
+      const x = 3 + b * (bW + 3);
+      const t = b / (bands-1);
+      const r = Math.round(124 + t*68), g = Math.round(106 - t*22), v = Math.round(247 - t*55);
+      ctx2.fillStyle = `rgba(${r},${g},${v},0.8)`;
+      ctx2.fillRect(x, barY-bh, bW, bh);
+    }
+  } else {
+    // Placeholder grid lines
+    ctx2.strokeStyle = 'rgba(30,30,46,0.8)';
+    ctx2.lineWidth = 1;
+    for (let y = 0; y < H; y += H/4) {
+      ctx2.beginPath(); ctx2.moveTo(0,y); ctx2.lineTo(W,y); ctx2.stroke();
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// SCULPTOR — RENDER LOOP
+// ═══════════════════════════════════════════════════════════
+let _sculptTime = 0;
+
+function sculptAnimLoop() {
+  sculptAnimId = requestAnimationFrame(sculptAnimLoop);
+  _sculptTime += 0.016;
+
+  if (!sculptScene || !sculptCamera || !sculptRenderer) return;
+
+  // Rotate objects slowly
+  sceneObjects.forEach(obj => {
+    obj.mesh.rotation.y += 0.005 * obj.volume;
+
+    // Pulse on sequencer fire
+    const now = Tone.now();
+    if (obj.pulseFire) {
+      obj.mesh.scale.setScalar(obj.baseScale * 1.15);
+      if (now - obj.pulseTime > 0.2) { obj.pulseFire = false; }
+    } else {
+      const bs = obj.baseScale;
+      const s = obj.mesh.scale.x;
+      if (s > bs) obj.mesh.scale.setScalar(Math.max(bs, s - 0.012));
+    }
+
+    // VU meter update
+    const i = sceneObjects.indexOf(obj);
+    if (obj.analyser && document.getElementById(`mvB${i}a`)) {
+      try {
+        const d = obj.analyser.getValue();
+        let rms = 0;
+        for (let k=0;k<d.length;k++) rms += d[k]*d[k];
+        rms = Math.sqrt(rms/d.length);
+        const levels = [rms>0.02, rms>0.08, rms>0.15, rms>0.25];
+        const colors = ['#4ade80','#eab308','#f97316','#ef4444'];
+        ['a','b','c','d'].forEach((c,ci) => {
+          const bar = document.getElementById(`mvB${i}${c}`);
+          if (bar) {
+            const h = levels[ci] ? 4 + ci*6 : 4;
+            bar.style.height = h + 'px';
+            bar.style.background = levels[ci] ? colors[ci] : 'var(--border)';
+          }
+        });
+      } catch(e){}
+    }
+  });
+
+  // Audio light pulse
+  if (sculptAnalyser && sculptAudioLight) {
+    try {
+      const d = sculptAnalyser.getValue();
+      let rms = 0;
+      for (let k=0;k<d.length;k++) rms += d[k]*d[k];
+      rms = Math.sqrt(rms/d.length);
+      sculptAudioLight.intensity = 0.5 + rms * 10;
+    } catch(e){}
+  }
+
+  // Camera auto-bob
+  sculptCamera.position.y += Math.sin(_sculptTime * 0.5) * 0.002;
+
+  drawEQCanvas();
+  sculptRenderer.render(sculptScene, sculptCamera);
+}
+
+// ═══════════════════════════════════════════════════════════
+// SCULPTOR — TRANSPORT
+// ═══════════════════════════════════════════════════════════
+function _setupTransportEvents() {
+  document.getElementById('sculptPlay').addEventListener('click', startSculptorAudio);
+  document.getElementById('sculptStop').addEventListener('click', teardownSculptorAudio);
+
+  const tempoSlider = document.getElementById('sculptTempo');
+  tempoSlider.addEventListener('input', () => {
+    const bpm = +tempoSlider.value;
+    document.getElementById('sculptTempoVal').textContent = bpm + ' BPM';
+    updateSliderFill(tempoSlider);
+    if (sculptIsPlaying) Tone.getTransport().bpm.rampTo(bpm, 0.5);
+  });
+  updateSliderFill(tempoSlider);
+
+  const volSlider = document.getElementById('sculptMasterVol');
+  volSlider.addEventListener('input', () => {
+    const v = +volSlider.value;
+    document.getElementById('sculptMasterVolVal').textContent = Math.round(v*100) + '%';
+    updateSliderFill(volSlider);
+    if (sculptMaster) sculptMaster.gain.rampTo(v, 0.1);
+  });
+  updateSliderFill(volSlider);
+
+  document.getElementById('sculptKey').addEventListener('change', () => {
+    // Nothing to rebuild; getSculptNotes() reads on each step
+  });
+
+  // Tap tempo
+  let _sTapTimes = [], _sTapTimer = null;
+  document.getElementById('sculptTap').addEventListener('click', () => {
+    const now = Date.now();
+    _sTapTimes.push(now);
+    clearTimeout(_sTapTimer);
+    _sTapTimer = setTimeout(() => { _sTapTimes = []; }, 3000);
+    if (_sTapTimes.length < 2) return;
+    const intervals = [];
+    for (let i = 1; i < _sTapTimes.length; i++) intervals.push(_sTapTimes[i]-_sTapTimes[i-1]);
+    const bpm = Math.round(60000 / (intervals.reduce((a,b)=>a+b,0)/intervals.length));
+    const clamped = Math.max(40,Math.min(220,bpm));
+    tempoSlider.value = clamped;
+    document.getElementById('sculptTempoVal').textContent = clamped + ' BPM';
+    updateSliderFill(tempoSlider);
+    if (sculptIsPlaying) Tone.getTransport().bpm.rampTo(clamped, 0.3);
+    showToast(`Tempo → ${clamped} BPM`);
+  });
+
+  // Clear scene
+  document.getElementById('clearSceneBtn').addEventListener('click', () => {
+    teardownSculptorAudio();
+    [...sceneObjects].forEach(o => deleteSculptObj(o));
+    sceneObjects.length = 0;
+    refreshObjList(); refreshMixerStrips();
+    showToast('scene cleared');
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// SCULPTOR — KEYBOARD SHORTCUTS
+// ═══════════════════════════════════════════════════════════
+document.addEventListener('keydown', e => {
+  if (activeMode !== 'sculptor') return;
+  const tag = e.target.tagName;
+  if (tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT') return;
+
+  switch(e.code) {
+    case 'Space':
+      e.preventDefault();
+      sculptIsPlaying ? teardownSculptorAudio() : startSculptorAudio();
+      break;
+    case 'Delete': case 'Backspace':
+      e.preventDefault();
+      if (selectedSculptObj) deleteSculptObj(selectedSculptObj);
+      break;
+    case 'KeyG':
+      _sculptTransformMode = _sculptTransformMode==='grab' ? null : 'grab';
+      showToast(_sculptTransformMode ? 'grab mode — drag to move' : 'grab cancelled');
+      break;
+    case 'KeyR':
+      _sculptTransformMode = _sculptTransformMode==='rotate' ? null : 'rotate';
+      showToast(_sculptTransformMode ? 'rotate mode — drag to rotate' : 'rotate cancelled');
+      break;
+    case 'KeyS':
+      _sculptTransformMode = _sculptTransformMode==='scale' ? null : 'scale';
+      showToast(_sculptTransformMode ? 'scale mode — drag to scale' : 'scale cancelled');
+      break;
+    case 'Escape':
+      _sculptTransformMode = null;
+      if (selectedSculptObj) selectSculptObj(null);
+      break;
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
+// SCULPTOR — EXPORTS
+// ═══════════════════════════════════════════════════════════
+document.getElementById('sculptExportMidi').addEventListener('click', () => {
+  if (!sceneObjects.length) { showToast('add objects to the scene first'); return; }
+  if (typeof MidiWriter === 'undefined') { showToast('MIDI library not loaded'); return; }
+  try {
+    const notes  = getSculptNotes();
+    const bpm    = +document.getElementById('sculptTempo').value;
+    const tracks = [];
+    sceneObjects.filter(o=>o.active).forEach(obj => {
+      const track = new MidiWriter.Track();
+      track.setTempo(bpm);
+      for (let step = 0; step < 32; step++) {
+        const role = obj.audioRole;
+        let fire = false;
+        if      (role==='melody')     fire = step%4===0;
+        else if (role==='bass')       fire = [0,8,16,24].includes(step);
+        else if (role==='pad')        fire = step===0||step===16;
+        else if (role==='percussion') fire = step%4===0;
+        else if (role==='arp')        fire = true;
+        if (!fire) continue;
+        const idx  = Math.round(obj.pitch*(notes.length-1));
+        const note = notes[Math.max(0,Math.min(notes.length-1,idx))];
+        const dur  = role==='bass'?'2': role==='pad'?'1': role==='percussion'?'16': '8';
+        track.addEvent(new MidiWriter.NoteEvent({pitch:[note],duration:dur,wait:'0',velocity:70}));
+      }
+      tracks.push(track);
+    });
+    if (!tracks.length) { showToast('no active objects to export'); return; }
+    const writer = new MidiWriter.Writer(tracks);
+    const a = document.createElement('a');
+    a.download='sculptor-composition.mid'; a.href=writer.dataUri(); a.click();
+    showToast('MIDI exported');
+  } catch(err) { showToast('MIDI export failed: '+err.message); }
+});
+
+document.getElementById('sculptExportPng').addEventListener('click', () => {
+  if (!sculptRenderer) { showToast('enter sculptor mode first'); return; }
+  const a = document.createElement('a');
+  a.download='sculptor-scene.png';
+  a.href = sculptRenderer.domElement.toDataURL('image/png');
+  a.click();
+  showToast('scene exported');
+});
+
+// ═══════════════════════════════════════════════════════════
+// SCULPTOR — MODE SWITCHING
+// ═══════════════════════════════════════════════════════════
+function switchMode(mode) {
+  if (mode === activeMode) return;
+  activeMode = mode;
+  if (mode === 'sculptor') {
+    if (isPlaying) stopMusic();
+    document.querySelector('.app').style.display = 'none';
+    document.getElementById('sculptorMode').classList.add('visible');
+    document.getElementById('modeCanvas').classList.remove('active');
+    document.getElementById('modeSculptor').classList.add('active');
+    // Defer init so the viewport has its final dimensions
+    requestAnimationFrame(() => initSculptor());
+  } else {
+    teardownSculptorAudio();
+    if (sculptAnimId) { cancelAnimationFrame(sculptAnimId); sculptAnimId = null; }
+    document.querySelector('.app').style.display = '';
+    document.getElementById('sculptorMode').classList.remove('visible');
+    document.getElementById('modeCanvas').classList.add('active');
+    document.getElementById('modeSculptor').classList.remove('active');
+  }
+}
+
+document.getElementById('modeCanvas').addEventListener('click',   () => switchMode('canvas'));
+document.getElementById('modeSculptor').addEventListener('click', () => switchMode('sculptor'));
+document.getElementById('sculptBack').addEventListener('click',   () => switchMode('canvas'));
 
 // ── Auto-reanalysis every 6s while playing ────────────────
 // Uses smooth updateMusicParams() — no audio graph teardown
