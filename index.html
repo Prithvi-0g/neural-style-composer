@@ -971,29 +971,53 @@
     <div id="propsContent" style="display:none; flex-direction:column">
       <div class="props-section">
         <div class="props-section-label">TRANSFORM</div>
-        <div class="transform-row">
-          <span class="transform-label">position</span>
-          <div class="xyz-inputs">
-            <input class="xyz-input" id="propPX" type="number" step="0.1" value="0">
-            <input class="xyz-input" id="propPY" type="number" step="0.1" value="0">
-            <input class="xyz-input" id="propPZ" type="number" step="0.1" value="0">
-          </div>
+        <!-- Position sliders -->
+        <div class="audio-slider-row">
+          <span class="audio-slider-label">POS X</span>
+          <input type="range" id="propPX" min="-10" max="10" step="0.05" value="0" style="flex:1">
+          <span class="audio-slider-val" id="propPXVal">0.00</span>
         </div>
-        <div class="transform-row">
-          <span class="transform-label">rotation°</span>
-          <div class="xyz-inputs">
-            <input class="xyz-input" id="propRX" type="number" step="1" value="0">
-            <input class="xyz-input" id="propRY" type="number" step="1" value="0">
-            <input class="xyz-input" id="propRZ" type="number" step="1" value="0">
-          </div>
+        <div class="audio-slider-row">
+          <span class="audio-slider-label">POS Y</span>
+          <input type="range" id="propPY" min="-10" max="10" step="0.05" value="0" style="flex:1">
+          <span class="audio-slider-val" id="propPYVal">0.00</span>
         </div>
-        <div class="transform-row">
-          <span class="transform-label">scale</span>
-          <div class="xyz-inputs">
-            <input class="xyz-input" id="propSX" type="number" step="0.1" value="1" min="0.01">
-            <input class="xyz-input" id="propSY" type="number" step="0.1" value="1" min="0.01">
-            <input class="xyz-input" id="propSZ" type="number" step="0.1" value="1" min="0.01">
-          </div>
+        <div class="audio-slider-row">
+          <span class="audio-slider-label">POS Z</span>
+          <input type="range" id="propPZ" min="-10" max="10" step="0.05" value="0" style="flex:1">
+          <span class="audio-slider-val" id="propPZVal">0.00</span>
+        </div>
+        <!-- Rotation sliders -->
+        <div class="audio-slider-row">
+          <span class="audio-slider-label">ROT X</span>
+          <input type="range" id="propRX" min="-180" max="180" step="1" value="0" style="flex:1">
+          <span class="audio-slider-val" id="propRXVal">0°</span>
+        </div>
+        <div class="audio-slider-row">
+          <span class="audio-slider-label">ROT Y</span>
+          <input type="range" id="propRY" min="-180" max="180" step="1" value="0" style="flex:1">
+          <span class="audio-slider-val" id="propRYVal">0°</span>
+        </div>
+        <div class="audio-slider-row">
+          <span class="audio-slider-label">ROT Z</span>
+          <input type="range" id="propRZ" min="-180" max="180" step="1" value="0" style="flex:1">
+          <span class="audio-slider-val" id="propRZVal">0°</span>
+        </div>
+        <!-- Scale sliders -->
+        <div class="audio-slider-row">
+          <span class="audio-slider-label">SCALE X</span>
+          <input type="range" id="propSX" min="0.01" max="5" step="0.01" value="1" style="flex:1">
+          <span class="audio-slider-val" id="propSXVal">1.00</span>
+        </div>
+        <div class="audio-slider-row">
+          <span class="audio-slider-label">SCALE Y</span>
+          <input type="range" id="propSY" min="0.01" max="5" step="0.01" value="1" style="flex:1">
+          <span class="audio-slider-val" id="propSYVal">1.00</span>
+        </div>
+        <div class="audio-slider-row">
+          <span class="audio-slider-label">SCALE Z</span>
+          <input type="range" id="propSZ" min="0.01" max="5" step="0.01" value="1" style="flex:1">
+          <span class="audio-slider-val" id="propSZVal">1.00</span>
         </div>
       </div>
       <div class="props-section">
@@ -2767,17 +2791,31 @@ function _syncPropsFromObj(obj) {
   if (!obj) return;
   const m = obj.mesh;
   const r2d = v => Math.round(v * 180 / Math.PI);
-  const f2 = v => v.toFixed(2);
+  const f2  = v => v.toFixed(2);
 
+  // Position sliders
   document.getElementById('propPX').value = m.position.x.toFixed(2);
   document.getElementById('propPY').value = m.position.y.toFixed(2);
   document.getElementById('propPZ').value = m.position.z.toFixed(2);
+  document.getElementById('propPXVal').textContent = m.position.x.toFixed(2);
+  document.getElementById('propPYVal').textContent = m.position.y.toFixed(2);
+  document.getElementById('propPZVal').textContent = m.position.z.toFixed(2);
+
+  // Rotation sliders
   document.getElementById('propRX').value = r2d(m.rotation.x);
   document.getElementById('propRY').value = r2d(m.rotation.y);
   document.getElementById('propRZ').value = r2d(m.rotation.z);
+  document.getElementById('propRXVal').textContent = r2d(m.rotation.x) + '°';
+  document.getElementById('propRYVal').textContent = r2d(m.rotation.y) + '°';
+  document.getElementById('propRZVal').textContent = r2d(m.rotation.z) + '°';
+
+  // Scale sliders
   document.getElementById('propSX').value = m.scale.x.toFixed(2);
   document.getElementById('propSY').value = m.scale.y.toFixed(2);
   document.getElementById('propSZ').value = m.scale.z.toFixed(2);
+  document.getElementById('propSXVal').textContent = m.scale.x.toFixed(2);
+  document.getElementById('propSYVal').textContent = m.scale.y.toFixed(2);
+  document.getElementById('propSZVal').textContent = m.scale.z.toFixed(2);
 
   const mat = m.material;
   document.getElementById('propColor').value   = '#' + mat.color.getHexString();
@@ -2811,33 +2849,41 @@ function _syncPropsFromObj(obj) {
   atBtn.textContent = obj.active ? '● ACTIVE' : '○ MUTED';
   atBtn.classList.toggle('is-active', obj.active);
 
-  // Re-sync slider fills
-  ['propMetal','propRough','propOpacity','propPitch','propVolume','propPan','propAttack','propRelease','propFilter']
+  // Sync all slider fills
+  ['propPX','propPY','propPZ','propRX','propRY','propRZ','propSX','propSY','propSZ',
+   'propMetal','propRough','propOpacity','propPitch','propVolume','propPan','propAttack','propRelease','propFilter']
     .forEach(id => updateSliderFill(document.getElementById(id)));
 }
 
 function _setupPropsPanelEvents() {
-  // Transform
-  const posIds = ['propPX','propPY','propPZ'];
-  const rotIds = ['propRX','propRY','propRZ'];
-  const sclIds = ['propSX','propSY','propSZ'];
-  posIds.forEach((id, i) => {
-    document.getElementById(id).addEventListener('input', () => {
+  // Position sliders
+  [['propPX','propPXVal',0],['propPY','propPYVal',1],['propPZ','propPZVal',2]].forEach(([id,valId,i]) => {
+    document.getElementById(id).addEventListener('input', e => {
       if (!selectedSculptObj) return;
-      selectedSculptObj.mesh.position.setComponent(i, +document.getElementById(id).value);
+      const v = +e.target.value;
+      selectedSculptObj.mesh.position.setComponent(i, v);
+      document.getElementById(valId).textContent = v.toFixed(2);
+      updateSliderFill(e.target);
     });
   });
-  rotIds.forEach((id, i) => {
-    document.getElementById(id).addEventListener('input', () => {
+  // Rotation sliders
+  [['propRX','propRXVal',0],['propRY','propRYVal',1],['propRZ','propRZVal',2]].forEach(([id,valId,i]) => {
+    document.getElementById(id).addEventListener('input', e => {
       if (!selectedSculptObj) return;
-      const deg = +document.getElementById(id).value;
+      const deg = +e.target.value;
       selectedSculptObj.mesh.rotation['xyz'[i]] = deg * Math.PI / 180;
+      document.getElementById(valId).textContent = deg + '°';
+      updateSliderFill(e.target);
     });
   });
-  sclIds.forEach((id, i) => {
-    document.getElementById(id).addEventListener('input', () => {
+  // Scale sliders
+  [['propSX','propSXVal',0],['propSY','propSYVal',1],['propSZ','propSZVal',2]].forEach(([id,valId,i]) => {
+    document.getElementById(id).addEventListener('input', e => {
       if (!selectedSculptObj) return;
-      selectedSculptObj.mesh.scale.setComponent(i, Math.max(0.01, +document.getElementById(id).value));
+      const v = Math.max(0.01, +e.target.value);
+      selectedSculptObj.mesh.scale.setComponent(i, v);
+      document.getElementById(valId).textContent = v.toFixed(2);
+      updateSliderFill(e.target);
     });
   });
 
